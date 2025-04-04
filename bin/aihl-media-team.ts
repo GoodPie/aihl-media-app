@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { AihlMediaTeamStack } from '../lib/aihl-media-team-stack';
+import { AIHLMediaTeamStack } from '../lib/aihl-media-team-stack';
 
 const app = new cdk.App();
-new AihlMediaTeamStack(app, 'AihlMediaTeamStack', {
+new AIHLMediaTeamStack(app, 'AIHLMediaTeamStack', {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */
@@ -14,7 +14,7 @@ new AihlMediaTeamStack(app, 'AihlMediaTeamStack', {
 
   /* Uncomment the next line if you know exactly what Account and Region you
    * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'ap-southeast-2' },
 
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
 });
