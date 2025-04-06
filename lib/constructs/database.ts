@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 export interface DatabaseProps {
@@ -18,19 +17,11 @@ export class Database extends Construct {
   constructor(scope: Construct, id: string, props?: DatabaseProps) {
     super(scope, id);
 
-    // Create encryption key for tables
-    const encryptionKey = new kms.Key(this, 'TableEncryptionKey', {
-      enableKeyRotation: true
-    });
-
     // Teams Table
     this.teamsTable = new dynamodb.Table(this, 'TeamsTable', {
       partitionKey: { name: 'teamId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: encryptionKey,
-      pointInTimeRecovery: true,
       deletionProtection: true
     });
 
@@ -39,9 +30,6 @@ export class Database extends Construct {
       partitionKey: { name: 'playerId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: encryptionKey,
-      pointInTimeRecovery: true,
       deletionProtection: true
     });
 
@@ -55,9 +43,6 @@ export class Database extends Construct {
       partitionKey: { name: 'gameId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: encryptionKey,
-      pointInTimeRecovery: true,
       deletionProtection: true
     });
 
@@ -72,9 +57,6 @@ export class Database extends Construct {
       partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: encryptionKey,
-      pointInTimeRecovery: true,
       deletionProtection: true
     });
 
@@ -89,9 +71,6 @@ export class Database extends Construct {
       partitionKey: { name: 'templateId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: encryptionKey,
-      pointInTimeRecovery: true,
       deletionProtection: true
     });
 
@@ -103,7 +82,6 @@ export class Database extends Construct {
 
   // Method to grant permissions to a role
   public grantTablePermissions(role: iam.IRole): void {
-    // Instead of full read/write access, grant specific permissions
     this.teamsTable.grantReadData(role);
     this.teamsTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
 

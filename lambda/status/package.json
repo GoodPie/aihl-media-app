@@ -1,16 +1,14 @@
 {
-  "name": "aihl-media-games-lambda",
+  "name": "aihl-media-team-status-lambda",
   "version": "1.0.0",
-  "description": "Lambda function for AIHL Media Games management",
+  "description": "Lambda function for AIHL API status",
   "main": "index.mjs",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "uuid": "^9.0.1"
+    "@aws-sdk/client-dynamodb": "^3.0.0"
   },
   "devDependencies": {},
   "author": "",
