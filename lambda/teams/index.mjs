@@ -161,7 +161,9 @@ async function getTeam(teamId) {
  * @returns {Promise<Array>} - List of teams
  */
 async function listTeams(queryParams = {}) {
-    const { division, limit } = queryParams;
+    // Ensure queryParams is an object even if null is explicitly passed
+    const safeQueryParams = queryParams ?? {};
+    const { division, limit } = safeQueryParams;
 
     let params = {
         TableName: TABLE_NAME

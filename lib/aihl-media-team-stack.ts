@@ -38,7 +38,6 @@ export class AIHLMediaTeamStack extends cdk.Stack {
         database.grantTablePermissions(lambdaFunctions.lambdaRole);
         storage.grantAssetsBucketAccess(lambdaFunctions.lambdaRole);
 
-
         // Create API Gateway module
         const api = new Api(this, 'Api', {
             userPool: auth.userPool,

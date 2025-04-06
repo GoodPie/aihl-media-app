@@ -23,7 +23,7 @@ export class Storage extends Construct {
             s3.HttpMethods.PUT,
             s3.HttpMethods.POST
           ],
-          allowedOrigins: ['http://localhost:3000'],
+          allowedOrigins: ['http://localhost:5173'],
           allowedHeaders: ['Authorization', 'Content-Type']
         }
       ],
