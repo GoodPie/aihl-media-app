@@ -4,6 +4,11 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, UpdateComm
 const client = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(client);
 
+// Get table names from environment variables
+const TEMPLATES_TABLE = process.env.TEMPLATES_TABLE || 'Templates';
+const TEMPLATE_CATEGORIES_TABLE = 'TemplateCategories';
+const TEMPLATE_VARIABLES_TABLE = 'TemplateVariables';
+
 // Define CORS headers
 const corsHeaders = {
     'Content-Type': 'application/json',
@@ -102,7 +107,7 @@ export const handler = async (event) => {
 
 async function listCategories() {
     const params = {
-        TableName: 'TemplateCategories'
+        TableName: TEMPLATE_CATEGORIES_TABLE
     };
 
     const result = await dynamodb.send(new ScanCommand(params));
@@ -116,7 +121,7 @@ async function listCategories() {
 
 async function getCategory(categoryId) {
     const params = {
-        TableName: 'TemplateCategories',
+        TableName: TEMPLATE_CATEGORIES_TABLE,
         Key: {
             categoryId: categoryId
         }
@@ -146,7 +151,7 @@ async function createCategory(category) {
     category.updatedAt = now;
 
     const params = {
-        TableName: 'TemplateCategories',
+        TableName: TEMPLATE_CATEGORIES_TABLE,
         Item: category,
         ConditionExpression: 'attribute_not_exists(categoryId)'
     };
@@ -179,7 +184,7 @@ async function updateCategory(categoryId, updates) {
     });
 
     const params = {
-        TableName: 'TemplateCategories',
+        TableName: TEMPLATE_CATEGORIES_TABLE,
         Key: {
             categoryId: categoryId
         },
@@ -200,7 +205,7 @@ async function updateCategory(categoryId, updates) {
 
 async function deleteCategory(categoryId) {
     const params = {
-        TableName: 'TemplateCategories',
+        TableName: TEMPLATE_CATEGORIES_TABLE,
         Key: {
             categoryId: categoryId
         }
@@ -222,7 +227,7 @@ async function listTemplates(categoryId) {
 
     if (categoryId) {
         params = {
-            TableName: 'Templates',
+            TableName: TEMPLATES_TABLE,
             IndexName: 'CategoryIndex',
             KeyConditionExpression: 'categoryId = :categoryId',
             ExpressionAttributeValues: {
@@ -239,7 +244,7 @@ async function listTemplates(categoryId) {
         };
     } else {
         params = {
-            TableName: 'Templates'
+            TableName: TEMPLATES_TABLE
         };
 
         const result = await dynamodb.send(new ScanCommand(params));
@@ -254,7 +259,7 @@ async function listTemplates(categoryId) {
 
 async function getTemplate(templateId) {
     const params = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         Key: {
             templateId: templateId
         }
@@ -289,7 +294,7 @@ async function createTemplate(template) {
     template.updatedAt = now;
 
     const params = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         Item: template
     };
 
@@ -321,7 +326,7 @@ async function updateTemplate(templateId, updates) {
     });
 
     const params = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         Key: {
             templateId: templateId
         },
@@ -342,7 +347,7 @@ async function updateTemplate(templateId, updates) {
 
 async function deleteTemplate(templateId) {
     const params = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         Key: {
             templateId: templateId
         }
@@ -360,7 +365,7 @@ async function deleteTemplate(templateId) {
 async function setDefaultTemplate(templateId) {
     // First, get the template to determine its category
     const getParams = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         Key: {
             templateId: templateId
         }
@@ -381,7 +386,7 @@ async function setDefaultTemplate(templateId) {
 
     // Find all templates in the same category and set isDefault to false
     const queryParams = {
-        TableName: 'Templates',
+        TableName: TEMPLATES_TABLE,
         IndexName: 'CategoryIndex',
         KeyConditionExpression: 'categoryId = :categoryId',
         ExpressionAttributeValues: {
@@ -394,7 +399,7 @@ async function setDefaultTemplate(templateId) {
     // Update each template in the category
     const updatePromises = categoryTemplates.Items.map(item => {
         const updateParams = {
-            TableName: 'Templates',
+            TableName: TEMPLATES_TABLE,
             Key: {
                 templateId: item.templateId
             },
@@ -426,7 +431,7 @@ async function listVariables(category) {
 
     if (category) {
         params = {
-            TableName: 'TemplateVariables',
+            TableName: TEMPLATE_VARIABLES_TABLE,
             IndexName: 'CategoryIndex',
             KeyConditionExpression: 'category = :category',
             ExpressionAttributeValues: {
@@ -443,7 +448,7 @@ async function listVariables(category) {
         };
     } else {
         params = {
-            TableName: 'TemplateVariables'
+            TableName: TEMPLATE_VARIABLES_TABLE
         };
 
         const result = await dynamodb.send(new ScanCommand(params));

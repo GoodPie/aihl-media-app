@@ -80,21 +80,56 @@ export class Database extends Construct {
     });
   }
 
+
   // Method to grant permissions to a role
   public grantTablePermissions(role: iam.IRole): void {
     this.teamsTable.grantReadData(role);
-    this.teamsTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+    this.teamsTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query'
+    );
 
     this.playersTable.grantReadData(role);
-    this.playersTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+    this.playersTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query'
+    );
 
     this.gamesTable.grantReadData(role);
-    this.gamesTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+    this.gamesTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query'
+    );
 
     this.eventsTable.grantReadData(role);
-    this.eventsTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+    this.eventsTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query'
+    );
 
     this.templatesTable.grantReadData(role);
-    this.templatesTable.grant(role, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+    this.templatesTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query');
   }
 }

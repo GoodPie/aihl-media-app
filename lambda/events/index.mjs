@@ -212,8 +212,8 @@ async function createEvent(eventData) {
             const player = await verifyPlayerExists(newEvent.playerId);
 
             // Add player details to the event
-            newEvent.playerName = player.playerName;
-            newEvent.playerNumber = player.jerseyNumber;
+            newEvent.playerName = player.name;
+            newEvent.playerNumber = player.number;
 
             // If team ID is not provided, get it from the player
             if (!newEvent.teamId) {

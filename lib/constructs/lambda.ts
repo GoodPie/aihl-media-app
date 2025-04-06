@@ -102,6 +102,15 @@ export class LambdaFunctions extends Construct {
         });
         this.eventLambdaRole.addToPolicy(this.lambdaPolicies);
 
+        // Create templates Lambda role
+        this.templatesLambdaRole = new iam.Role(this, 'TemplatesLambdaRole', {
+            assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+            managedPolicies: [
+                iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+            ]
+        });
+        this.templatesLambdaRole.addToPolicy(this.lambdaPolicies);
+
         // Create status Lambda role
         this.statusLambdaRole = new iam.Role(this, 'StatusLambdaRole', {
             assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -115,21 +124,28 @@ export class LambdaFunctions extends Construct {
         props.teamsTable.grantReadData(this.teamLambdaRole);
         props.teamsTable.grant(this.teamLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
 
+        props.teamsTable.grantReadData(this.playerLambdaRole);
         props.playersTable.grantReadData(this.playerLambdaRole);
         props.playersTable.grant(this.playerLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
 
         props.gamesTable.grantReadData(this.gameLambdaRole);
         props.gamesTable.grant(this.gameLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+        props.gamesTable.grantReadData(this.teamLambdaRole);
 
         props.eventsTable.grantReadData(this.eventLambdaRole);
         props.eventsTable.grant(this.eventLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
         props.templatesTable.grantReadData(this.eventLambdaRole);
+
+        // Grant permissions to templates Lambda role
+        props.templatesTable.grantReadData(this.templatesLambdaRole);
+        props.templatesTable.grant(this.templatesLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:Scan', 'dynamodb:Query');
 
         // Grant asset bucket access to all roles
         props.assetsBucket.grantRead(this.teamLambdaRole);
         props.assetsBucket.grantRead(this.playerLambdaRole);
         props.assetsBucket.grantRead(this.gameLambdaRole);
         props.assetsBucket.grantRead(this.eventLambdaRole);
+        props.assetsBucket.grantRead(this.templatesLambdaRole);
 
         // Common Lambda environment variables
         this.lambdaEnv = {

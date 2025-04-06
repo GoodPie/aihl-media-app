@@ -108,7 +108,7 @@ async function createPlayer(playerData) {
     };
 
     // Validate required fields
-    if (!player.playerName) {
+    if (!player.name) {
         const error = new Error('Player name is required');
         error.statusCode = 400;
         throw error;
