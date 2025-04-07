@@ -150,11 +150,6 @@ async function createEvent(eventData) {
     try {
         const game = await verifyGameExists(newEvent.gameId);
 
-        if (game.status !== 'in_progress') {
-            const error = new Error('Events can only be created for games in progress');
-            error.statusCode = 400;
-            throw error;
-        }
 
         // Add game context to the event if not provided
         if (!newEvent.gameTime) {

@@ -70,6 +70,7 @@ export class Api extends Construct {
         const gamesResource = this.api.root.addResource('games');
         const eventsResource = this.api.root.addResource('events');
         const templatesResource = this.api.root.addResource('templates');
+        const categoriesResource = this.api.root.addResource('categories');
         const statusResource = this.api.root.addResource('status');
 
         // Teams endpoints
@@ -208,6 +209,30 @@ export class Api extends Construct {
             requestValidator: validator,
         });
         templateResource.addMethod('DELETE', new apigateway.LambdaIntegration(props.templateLambda), {
+            authorizer: this.authorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            requestValidator: validator,
+        });
+
+        // Categories endpoints
+        categoriesResource.addMethod('GET', new apigateway.LambdaIntegration(props.templateLambda));
+        categoriesResource.addMethod('POST', new apigateway.LambdaIntegration(props.templateLambda), {
+            authorizer: this.authorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            requestValidator: validator,
+        });
+        const categoryResource = categoriesResource.addResource('{categoryId}');
+        categoryResource.addMethod('GET', new apigateway.LambdaIntegration(props.templateLambda), {
+            authorizer: this.authorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            requestValidator: validator,
+        });
+        categoryResource.addMethod('PUT', new apigateway.LambdaIntegration(props.templateLambda), {
+            authorizer: this.authorizer,
+            authorizationType: apigateway.AuthorizationType.COGNITO,
+            requestValidator: validator,
+        });
+        categoryResource.addMethod('DELETE', new apigateway.LambdaIntegration(props.templateLambda), {
             authorizer: this.authorizer,
             authorizationType: apigateway.AuthorizationType.COGNITO,
             requestValidator: validator,

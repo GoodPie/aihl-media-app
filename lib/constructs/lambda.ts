@@ -17,6 +17,7 @@ export interface LambdaProps {
     gamesTable: dynamodb.Table;
     eventsTable: dynamodb.Table;
     templatesTable: dynamodb.Table;
+    templatesCategoryTable: dynamodb.Table;
     assetsBucket: s3.Bucket;
 }
 
@@ -36,6 +37,9 @@ export class LambdaFunctions extends Construct {
     public readonly statusLambda: lambda.Function;
     public readonly lambdaEnv: { [key: string]: string };
 
+    private readonly environmentVariableKey: kms.IKey;
+    private readonly vpc: ec2.IVpc;
+
     private readonly lambdaPolicies = new iam.PolicyStatement({
         actions: [
             'ec2:CreateNetworkInterface',
@@ -49,14 +53,24 @@ export class LambdaFunctions extends Construct {
     constructor(scope: Construct, id: string, props: LambdaProps) {
         super(scope, id);
 
+        // Common Lambda environment variables
+        this.lambdaEnv = {
+            TEAMS_TABLE: props.teamsTable.tableName,
+            PLAYERS_TABLE: props.playersTable.tableName,
+            GAMES_TABLE: props.gamesTable.tableName,
+            EVENTS_TABLE: props.eventsTable.tableName,
+            TEMPLATES_TABLE: props.templatesTable.tableName,
+            TEMPLATE_CATEGORIES_TABLE: props.templatesCategoryTable.tableName,
+            ASSETS_BUCKET: props.assetsBucket.bucketName,
+            USER_POOL_ID: props.userPool.userPoolId,
+            CLIENT_ID: props.appClient.userPoolClientId
+        };
+
         // Create VPC for Lambda functions
-        const vpc = new ec2.Vpc(this, 'LambdaVpc', {
-            maxAzs: 2,
-            natGateways: 1
-        });
+        this.vpc = this.createVPC();
 
         // Create encryption key for environment variables
-        const envVarKey = new kms.Key(this, 'EnvVarKey', {
+        this.environmentVariableKey = new kms.Key(this, 'EnvVarKey', {
             enableKeyRotation: true
         });
 
@@ -123,6 +137,7 @@ export class LambdaFunctions extends Construct {
         // Grant specific permissions to each role
         props.teamsTable.grantReadData(this.teamLambdaRole);
         props.teamsTable.grant(this.teamLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+        props.teamsTable.grant(this.gameLambdaRole, 'dynamodb:GetItem', 'dynamodb:UpdateItem');
 
         props.teamsTable.grantReadData(this.playerLambdaRole);
         props.playersTable.grantReadData(this.playerLambdaRole);
@@ -130,15 +145,20 @@ export class LambdaFunctions extends Construct {
 
         props.gamesTable.grantReadData(this.gameLambdaRole);
         props.gamesTable.grant(this.gameLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
-        props.gamesTable.grantReadData(this.teamLambdaRole);
+        props.gamesTable.grant(this.teamLambdaRole, 'dynamodb:GetItem', 'dynamodb:UpdateItem');
+        props.gamesTable.grantReadWriteData(this.teamLambdaRole);
+        props.gamesTable.grantReadWriteData(this.eventLambdaRole);
 
         props.eventsTable.grantReadData(this.eventLambdaRole);
         props.eventsTable.grant(this.eventLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+        props.eventsTable.grantReadWriteData(this.gameLambdaRole);
         props.templatesTable.grantReadData(this.eventLambdaRole);
 
         // Grant permissions to templates Lambda role
-        props.templatesTable.grantReadData(this.templatesLambdaRole);
-        props.templatesTable.grant(this.templatesLambdaRole, 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:Scan', 'dynamodb:Query');
+        props.templatesTable.grantFullAccess(this.templatesLambdaRole);
+        props.templatesCategoryTable.grantFullAccess(this.templatesLambdaRole);
+        props.templatesTable.grant(this.templatesLambdaRole, "dynamodb:Scan", "dynamodb:Query");
+        props.templatesCategoryTable.grantFullAccess(this.templatesLambdaRole);
 
         // Grant asset bucket access to all roles
         props.assetsBucket.grantRead(this.teamLambdaRole);
@@ -147,99 +167,75 @@ export class LambdaFunctions extends Construct {
         props.assetsBucket.grantRead(this.eventLambdaRole);
         props.assetsBucket.grantRead(this.templatesLambdaRole);
 
-        // Common Lambda environment variables
-        this.lambdaEnv = {
-            TEAMS_TABLE: props.teamsTable.tableName,
-            PLAYERS_TABLE: props.playersTable.tableName,
-            GAMES_TABLE: props.gamesTable.tableName,
-            EVENTS_TABLE: props.eventsTable.tableName,
-            TEMPLATES_TABLE: props.templatesTable.tableName,
-            ASSETS_BUCKET: props.assetsBucket.bucketName,
-            USER_POOL_ID: props.userPool.userPoolId,
-            CLIENT_ID: props.appClient.userPoolClientId
-        };
-
         // Team Management Lambda
-        this.teamLambda = new lambda.Function(this, 'TeamFunction', {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/teams'),
-            environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.teamLambdaRole,
-            vpc: vpc,
-            tracing: lambda.Tracing.ACTIVE,
-            logRetention: logs.RetentionDays.ONE_WEEK,
-            timeout: cdk.Duration.seconds(10),
-        });
+        this.teamLambda = this.createLambdaFunction(
+            'TeamFunction',
+            this.teamLambdaRole,
+            'lambda/teams'
+        );
 
         // Player Management Lambda
-        this.playerLambda = new lambda.Function(this, 'PlayerFunction', {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/players'),
-            environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.playerLambdaRole,
-            vpc: vpc,
-            tracing: lambda.Tracing.ACTIVE,
-            logRetention: logs.RetentionDays.ONE_WEEK,
-            timeout: cdk.Duration.seconds(10),
-        });
+        this.playerLambda = this.createLambdaFunction(
+            'PlayerFunction',
+            this.playerLambdaRole,
+            'lambda/players'
+        );
 
         // Game Management Lambda
-        this.gameLambda = new lambda.Function(this, 'GameFunction', {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/games'),
-            environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.gameLambdaRole,
-            vpc: vpc,
-            tracing: lambda.Tracing.ACTIVE,
-            logRetention: logs.RetentionDays.ONE_WEEK,
-            timeout: cdk.Duration.seconds(10),
-        });
+        this.gameLambda = this.createLambdaFunction(
+            'GameFunction',
+            this.gameLambdaRole,
+            'lambda/games'
+        );
+
 
         // Event Tracking Lambda
-        this.eventLambda = new lambda.Function(this, 'EventFunction', {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/events'),
-            environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.eventLambdaRole,
-            vpc: vpc,
-            tracing: lambda.Tracing.ACTIVE,
-            logRetention: logs.RetentionDays.ONE_WEEK,
-            timeout: cdk.Duration.seconds(10),
-        });
+        this.eventLambda = this.createLambdaFunction(
+            'EventFunction',
+            this.eventLambdaRole,
+            'lambda/events'
+        );
 
-        this.templatesLambda = new lambda.Function(this, 'TemplatesFunction', {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/templates'),
-            environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.templatesLambdaRole,
-            vpc: vpc,
-            tracing: lambda.Tracing.ACTIVE,
-            logRetention: logs.RetentionDays.ONE_WEEK,
-            timeout: cdk.Duration.seconds(10),
-        });
+        this.templatesLambda = this.createLambdaFunction(
+            'TemplatesFunction',
+            this.templatesLambdaRole,
+            'lambda/templates'
+        );
 
         // Status Lambda function
-        this.statusLambda = new lambda.Function(this, 'StatusFunction', {
+        this.statusLambda = this.createLambdaFunction(
+            'StatusFunction',
+            this.statusLambdaRole,
+            'lambda/status'
+        );
+    }
+
+    /**
+     * Creates a Lambda function with the specified parameters.
+     * @param identifier The identifier for the Lambda function.
+     * @param role The IAM role to be assumed by the Lambda function.
+     * @param assetPath The path to the Lambda function code.
+     */
+    createLambdaFunction(identifier: string, role: iam.IRole, assetPath: string): lambda.Function {
+        return new lambda.Function(this, identifier, {
             runtime: lambda.Runtime.NODEJS_18_X,
             handler: 'index.handler',
-            code: lambda.Code.fromAsset('lambda/status'),
+            code: lambda.Code.fromAsset(assetPath),
             environment: this.lambdaEnv,
-            environmentEncryption: envVarKey,
-            role: this.statusLambdaRole,
-            vpc: vpc,
+            environmentEncryption: this.environmentVariableKey,
+            role: role,
+            vpc: this.vpc,
             tracing: lambda.Tracing.ACTIVE,
             logRetention: logs.RetentionDays.ONE_WEEK,
             timeout: cdk.Duration.seconds(10),
         });
+    }
+
+    createVPC(availabilityZones = 2, natGateways=1): ec2.IVpc {
+        return new ec2.Vpc(this, 'LambdaVpc', {
+            maxAzs: availabilityZones,
+            natGateways: natGateways
+        });
+
     }
 }

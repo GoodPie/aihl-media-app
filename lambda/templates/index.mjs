@@ -1,462 +1,160 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-
-const client = new DynamoDBClient({});
-const dynamodb = DynamoDBDocumentClient.from(client);
-
-// Get table names from environment variables
-const TEMPLATES_TABLE = process.env.TEMPLATES_TABLE || 'Templates';
-const TEMPLATE_CATEGORIES_TABLE = 'TemplateCategories';
-const TEMPLATE_VARIABLES_TABLE = 'TemplateVariables';
-
-// Define CORS headers
-const corsHeaders = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Credentials': true,
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'
-};
+import { createDynamoDBClient } from './db.mjs';
+import { handleOptionsRequest, parsePath, parseBody, createErrorResponse, createResponse } from './utils.mjs';
+import * as categoryService from './categoryService.mjs';
+import * as templateService from './templateService.mjs';
+import * as variableService from './variableService.mjs';
 
 /**
  * Main handler for Templates Lambda function
+ * @param {Object} event - The Lambda event
+ * @returns {Promise<Object>} The API response
  */
 export const handler = async (event) => {
-    console.log('Received event:', JSON.stringify(event, null, 2));
+  console.log('Received event:', JSON.stringify(event, null, 2));
 
-    // Handle OPTIONS method for CORS preflight requests
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: ''
-        };
-    }
+  // Handle OPTIONS method for CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return handleOptionsRequest();
+  }
 
-    // Parse path to determine operation
-    const pathSegments = event.path.split('/');
-    const resource = pathSegments[1]; // 'categories' or 'templates'
-    const resourceId = pathSegments[2]; // categoryId or templateId if present
+  try {
+    // Create DynamoDB client
+    const dynamodb = createDynamoDBClient();
 
-    // Parse request body if present
-    const requestBody = event.body ? JSON.parse(event.body) : {};
+    // Parse path and body
+    const { resource, resourceId, subResource } = parsePath(event.path);
+    const requestBody = parseBody(event.body);
 
-    try {
-        // Route to appropriate handler based on HTTP method and path
-        if (resource === 'categories') {
-            if (event.httpMethod === 'GET' && !resourceId) {
-                // GET /categories - List all categories
-                return await listCategories();
-            } else if (event.httpMethod === 'GET' && resourceId) {
-                // GET /categories/{categoryId} - Get a specific category
-                return await getCategory(resourceId);
-            } else if (event.httpMethod === 'POST') {
-                // POST /categories - Create a new category
-                return await createCategory(requestBody);
-            } else if (event.httpMethod === 'PUT' && resourceId) {
-                // PUT /categories/{categoryId} - Update a category
-                return await updateCategory(resourceId, requestBody);
-            } else if (event.httpMethod === 'DELETE' && resourceId) {
-                // DELETE /categories/{categoryId} - Delete a category
-                return await deleteCategory(resourceId);
-            }
-        } else if (resource === 'templates') {
-            if (event.httpMethod === 'GET' && !resourceId) {
-                // GET /templates - List all templates
-                return await listTemplates(requestBody.categoryId);
-            } else if (event.httpMethod === 'GET' && resourceId) {
-                // GET /templates/{templateId} - Get a specific template
-                return await getTemplate(resourceId);
-            } else if (event.httpMethod === 'POST') {
-                // POST /templates - Create a new template
-                return await createTemplate(requestBody);
-            } else if (event.httpMethod === 'PUT' && resourceId) {
-                // PUT /templates/{templateId} - Update a template
-                return await updateTemplate(resourceId, requestBody);
-            } else if (event.httpMethod === 'DELETE' && resourceId) {
-                // DELETE /templates/{templateId} - Delete a template
-                return await deleteTemplate(resourceId);
-            } else if (event.httpMethod === 'PUT' && resourceId && pathSegments[3] === 'default') {
-                // PUT /templates/{templateId}/default - Set template as default for its category
-                return await setDefaultTemplate(resourceId);
-            }
-        } else if (resource === 'variables') {
-            if (event.httpMethod === 'GET') {
-                // GET /variables - List all template variables
-                return await listVariables(requestBody.category);
-            }
-        }
-
-        // If no handler matched, return 404
-        return {
-            statusCode: 404,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Not Found' })
-        };
-    } catch (error) {
-        console.error('Error:', error);
-        return {
-            statusCode: 500,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Internal Server Error', error: error.message })
-        };
-    }
+    // Route to appropriate handler based on HTTP method and path
+    return await routeRequest(event.httpMethod, resource, resourceId, subResource, requestBody, dynamodb, event.queryStringParameters);
+  } catch (error) {
+    return createErrorResponse(error);
+  }
 };
 
-// ================= CATEGORY HANDLERS =================
+/**
+ * Route the request to the appropriate handler
+ * @param {string} httpMethod - The HTTP method
+ * @param {string} resource - The resource (categories, templates, variables)
+ * @param {string} resourceId - The resource ID
+ * @param {string} subResource - The sub-resource (e.g., 'default')
+ * @param {Object} requestBody - The request body
+ * @param {DynamoDBDocumentClient} dynamodb - The DynamoDB document client
+ * @param {Object} queryParams - The query parameters
+ * @returns {Promise<Object>} The API response
+ */
+async function routeRequest(httpMethod, resource, resourceId, subResource, requestBody, dynamodb, queryParams) {
+  // Handle categories
+  if (resource === 'categories') {
+    return await handleCategoryRequest(httpMethod, resourceId, requestBody, dynamodb);
+  }
 
-async function listCategories() {
-    const params = {
-        TableName: TEMPLATE_CATEGORIES_TABLE
-    };
+  // Handle templates
+  else if (resource === 'templates') {
+    return await handleTemplateRequest(httpMethod, resourceId, subResource, requestBody, dynamodb, queryParams);
+  }
 
-    const result = await dynamodb.send(new ScanCommand(params));
+  // Handle variables
+  else if (resource === 'variables') {
+    const category = queryParams && queryParams.category;
+    return await handleVariableRequest(httpMethod, category, dynamodb);
+  }
 
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(result.Items)
-    };
+  // If no handler matched, return 404
+  return createResponse(404, { message: 'Not Found' });
 }
 
-async function getCategory(categoryId) {
-    const params = {
-        TableName: TEMPLATE_CATEGORIES_TABLE,
-        Key: {
-            categoryId: categoryId
-        }
-    };
+/**
+ * Handle requests for the categories resource
+ * @param {string} httpMethod - The HTTP method
+ * @param {string} categoryId - The category ID
+ * @param {Object} requestBody - The request body
+ * @param {DynamoDBDocumentClient} dynamodb - The DynamoDB document client
+ * @returns {Promise<Object>} The API response
+ */
+async function handleCategoryRequest(httpMethod, categoryId, requestBody, dynamodb) {
+  switch (httpMethod) {
+    case 'GET':
+      return categoryId
+        ? await categoryService.getCategory(dynamodb, categoryId)
+        : await categoryService.listCategories(dynamodb);
 
-    const result = await dynamodb.send(new GetCommand(params));
+    case 'POST':
+      return await categoryService.createCategory(dynamodb, requestBody);
 
-    if (!result.Item) {
-        return {
-            statusCode: 404,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Category not found' })
-        };
-    }
+    case 'PUT':
+      if (categoryId) {
+        return await categoryService.updateCategory(dynamodb, categoryId, requestBody);
+      }
+      break;
 
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(result.Item)
-    };
+    case 'DELETE':
+      if (categoryId) {
+        return await categoryService.deleteCategory(dynamodb, categoryId);
+      }
+      break;
+  }
+
+  return createResponse(404, { message: 'Not Found' });
 }
 
-async function createCategory(category) {
-    // Add timestamps
-    const now = new Date().toISOString();
-    category.createdAt = now;
-    category.updatedAt = now;
+/**
+ * Handle requests for the templates resource
+ * @param {string} httpMethod - The HTTP method
+ * @param {string} templateId - The template ID
+ * @param {string} subResource - The sub-resource (e.g., 'default')
+ * @param {Object} requestBody - The request body
+ * @param {DynamoDBDocumentClient} dynamodb - The DynamoDB document client
+ * @param {Object} queryParams - The query parameters
+ * @returns {Promise<Object>} The API response
+ */
+async function handleTemplateRequest(httpMethod, templateId, subResource, requestBody, dynamodb, queryParams) {
+  // Handle special case for setting default template
+  if (httpMethod === 'PUT' && templateId && subResource === 'default') {
+    return await templateService.setDefaultTemplate(dynamodb, templateId);
+  }
 
-    const params = {
-        TableName: TEMPLATE_CATEGORIES_TABLE,
-        Item: category,
-        ConditionExpression: 'attribute_not_exists(categoryId)'
-    };
+  switch (httpMethod) {
+    case 'GET':
+      if (templateId) {
+        return await templateService.getTemplate(dynamodb, templateId);
+      } else {
+        // Extract categoryId from query parameters if available
+        const categoryId = queryParams && queryParams.categoryId;
+        return await templateService.listTemplates(dynamodb, categoryId);
+      }
 
-    await dynamodb.send(new PutCommand(params));
+    case 'POST':
+      return await templateService.createTemplate(dynamodb, requestBody);
 
-    return {
-        statusCode: 201,
-        headers: corsHeaders,
-        body: JSON.stringify(category)
-    };
+    case 'PUT':
+      if (templateId) {
+        return await templateService.updateTemplate(dynamodb, templateId, requestBody);
+      }
+      break;
+
+    case 'DELETE':
+      if (templateId) {
+        return await templateService.deleteTemplate(dynamodb, templateId);
+      }
+      break;
+  }
+
+  return createResponse(404, { message: 'Not Found' });
 }
 
-async function updateCategory(categoryId, updates) {
-    // Update timestamp
-    updates.updatedAt = new Date().toISOString();
+/**
+ * Handle requests for the variables resource
+ * @param {string} httpMethod - The HTTP method
+ * @param {string} category - The category to filter by
+ * @param {DynamoDBDocumentClient} dynamodb - The DynamoDB document client
+ * @returns {Promise<Object>} The API response
+ */
+async function handleVariableRequest(httpMethod, category, dynamodb) {
+  if (httpMethod === 'GET') {
+    return await variableService.listVariables(dynamodb, category);
+  }
 
-    // Build update expression
-    let updateExpression = 'SET ';
-    const expressionAttributeValues = {};
-    const expressionAttributeNames = {};
-
-    Object.keys(updates).forEach((key, index) => {
-        const valueKey = `:val${index}`;
-        const nameKey = `#attr${index}`;
-        updateExpression += index === 0 ? '' : ', ';
-        updateExpression += `${nameKey} = ${valueKey}`;
-        expressionAttributeValues[valueKey] = updates[key];
-        expressionAttributeNames[nameKey] = key;
-    });
-
-    const params = {
-        TableName: TEMPLATE_CATEGORIES_TABLE,
-        Key: {
-            categoryId: categoryId
-        },
-        UpdateExpression: updateExpression,
-        ExpressionAttributeValues: expressionAttributeValues,
-        ExpressionAttributeNames: expressionAttributeNames,
-        ReturnValues: 'ALL_NEW'
-    };
-
-    const result = await dynamodb.send(new UpdateCommand(params));
-
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(result.Attributes)
-    };
+  return createResponse(404, { message: 'Not Found' });
 }
 
-async function deleteCategory(categoryId) {
-    const params = {
-        TableName: TEMPLATE_CATEGORIES_TABLE,
-        Key: {
-            categoryId: categoryId
-        }
-    };
-
-    await dynamodb.send(new DeleteCommand(params));
-
-    return {
-        statusCode: 204,
-        headers: corsHeaders,
-        body: JSON.stringify({ message: 'Category deleted successfully' })
-    };
-}
-
-// ================= TEMPLATE HANDLERS =================
-
-async function listTemplates(categoryId) {
-    let params;
-
-    if (categoryId) {
-        params = {
-            TableName: TEMPLATES_TABLE,
-            IndexName: 'CategoryIndex',
-            KeyConditionExpression: 'categoryId = :categoryId',
-            ExpressionAttributeValues: {
-                ':categoryId': categoryId
-            }
-        };
-
-        const result = await dynamodb.send(new QueryCommand(params));
-
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: JSON.stringify(result.Items)
-        };
-    } else {
-        params = {
-            TableName: TEMPLATES_TABLE
-        };
-
-        const result = await dynamodb.send(new ScanCommand(params));
-
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: JSON.stringify(result.Items)
-        };
-    }
-}
-
-async function getTemplate(templateId) {
-    const params = {
-        TableName: TEMPLATES_TABLE,
-        Key: {
-            templateId: templateId
-        }
-    };
-
-    const result = await dynamodb.send(new GetCommand(params));
-
-    if (!result.Item) {
-        return {
-            statusCode: 404,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Template not found' })
-        };
-    }
-
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(result.Item)
-    };
-}
-
-async function createTemplate(template) {
-    // Generate a unique ID if one is not provided
-    if (!template.templateId) {
-        template.templateId = `${template.categoryId}-${Date.now()}`;
-    }
-
-    // Add timestamps
-    const now = new Date().toISOString();
-    template.createdAt = now;
-    template.updatedAt = now;
-
-    const params = {
-        TableName: TEMPLATES_TABLE,
-        Item: template
-    };
-
-    await dynamodb.send(new PutCommand(params));
-
-    return {
-        statusCode: 201,
-        headers: corsHeaders,
-        body: JSON.stringify(template)
-    };
-}
-
-async function updateTemplate(templateId, updates) {
-    // Update timestamp
-    updates.updatedAt = new Date().toISOString();
-
-    // Build update expression
-    let updateExpression = 'SET ';
-    const expressionAttributeValues = {};
-    const expressionAttributeNames = {};
-
-    Object.keys(updates).forEach((key, index) => {
-        const valueKey = `:val${index}`;
-        const nameKey = `#attr${index}`;
-        updateExpression += index === 0 ? '' : ', ';
-        updateExpression += `${nameKey} = ${valueKey}`;
-        expressionAttributeValues[valueKey] = updates[key];
-        expressionAttributeNames[nameKey] = key;
-    });
-
-    const params = {
-        TableName: TEMPLATES_TABLE,
-        Key: {
-            templateId: templateId
-        },
-        UpdateExpression: updateExpression,
-        ExpressionAttributeValues: expressionAttributeValues,
-        ExpressionAttributeNames: expressionAttributeNames,
-        ReturnValues: 'ALL_NEW'
-    };
-
-    const result = await dynamodb.send(new UpdateCommand(params));
-
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify(result.Attributes)
-    };
-}
-
-async function deleteTemplate(templateId) {
-    const params = {
-        TableName: TEMPLATES_TABLE,
-        Key: {
-            templateId: templateId
-        }
-    };
-
-    await dynamodb.send(new DeleteCommand(params));
-
-    return {
-        statusCode: 204,
-        headers: corsHeaders,
-        body: JSON.stringify({ message: 'Template deleted successfully' })
-    };
-}
-
-async function setDefaultTemplate(templateId) {
-    // First, get the template to determine its category
-    const getParams = {
-        TableName: TEMPLATES_TABLE,
-        Key: {
-            templateId: templateId
-        }
-    };
-
-    const templateResult = await dynamodb.send(new GetCommand(getParams));
-
-    if (!templateResult.Item) {
-        return {
-            statusCode: 404,
-            headers: corsHeaders,
-            body: JSON.stringify({ message: 'Template not found' })
-        };
-    }
-
-    const template = templateResult.Item;
-    const categoryId = template.categoryId;
-
-    // Find all templates in the same category and set isDefault to false
-    const queryParams = {
-        TableName: TEMPLATES_TABLE,
-        IndexName: 'CategoryIndex',
-        KeyConditionExpression: 'categoryId = :categoryId',
-        ExpressionAttributeValues: {
-            ':categoryId': categoryId
-        }
-    };
-
-    const categoryTemplates = await dynamodb.send(new QueryCommand(queryParams));
-
-    // Update each template in the category
-    const updatePromises = categoryTemplates.Items.map(item => {
-        const updateParams = {
-            TableName: TEMPLATES_TABLE,
-            Key: {
-                templateId: item.templateId
-            },
-            UpdateExpression: 'SET isDefault = :isDefault, updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-                ':isDefault': item.templateId === templateId,
-                ':updatedAt': new Date().toISOString()
-            }
-        };
-
-        return dynamodb.send(new UpdateCommand(updateParams));
-    });
-
-    await Promise.all(updatePromises);
-
-    return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({
-            message: `Template ${templateId} set as default for category ${categoryId}`
-        })
-    };
-}
-
-// ================= VARIABLE HANDLERS =================
-
-async function listVariables(category) {
-    let params;
-
-    if (category) {
-        params = {
-            TableName: TEMPLATE_VARIABLES_TABLE,
-            IndexName: 'CategoryIndex',
-            KeyConditionExpression: 'category = :category',
-            ExpressionAttributeValues: {
-                ':category': category
-            }
-        };
-
-        const result = await dynamodb.send(new QueryCommand(params));
-
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: JSON.stringify(result.Items)
-        };
-    } else {
-        params = {
-            TableName: TEMPLATE_VARIABLES_TABLE
-        };
-
-        const result = await dynamodb.send(new ScanCommand(params));
-
-        return {
-            statusCode: 200,
-            headers: corsHeaders,
-            body: JSON.stringify(result.Items)
-        };
-    }
-}

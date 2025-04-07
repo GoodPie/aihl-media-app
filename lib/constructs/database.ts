@@ -13,6 +13,7 @@ export class Database extends Construct {
   public readonly gamesTable: dynamodb.Table;
   public readonly eventsTable: dynamodb.Table;
   public readonly templatesTable: dynamodb.Table;
+  public readonly templatesCategoryTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props?: DatabaseProps) {
     super(scope, id);
@@ -78,8 +79,16 @@ export class Database extends Construct {
       indexName: 'EventTypeIndex',
       partitionKey: { name: 'eventType', type: dynamodb.AttributeType.STRING }
     });
-  }
 
+    // Templates Category Table
+    this.templatesCategoryTable = new dynamodb.Table(this, 'TemplatesCategoryTable', {
+      partitionKey: { name: 'categoryId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      deletionProtection: true
+    });
+
+  }
 
   // Method to grant permissions to a role
   public grantTablePermissions(role: iam.IRole): void {
@@ -131,5 +140,15 @@ export class Database extends Construct {
         'dynamodb:GetItem',
         'dynamodb:Scan',
         'dynamodb:Query');
+
+    this.templatesCategoryTable.grantReadData(role);
+    this.templatesCategoryTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query');
   }
+
 }

@@ -31,11 +31,13 @@ export class AIHLMediaTeamStack extends cdk.Stack {
             gamesTable: database.gamesTable,
             eventsTable: database.eventsTable,
             templatesTable: database.templatesTable,
+            templatesCategoryTable: database.templatesCategoryTable,
             assetsBucket: storage.assetsBucket
         });
 
         // Grant permissions to Lambda role
         database.grantTablePermissions(lambdaFunctions.lambdaRole);
+        database.grantTablePermissions(lambdaFunctions.templatesLambdaRole);
         storage.grantAssetsBucketAccess(lambdaFunctions.lambdaRole);
 
         // Create API Gateway module
