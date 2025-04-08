@@ -18,6 +18,7 @@ export interface LambdaProps {
     eventsTable: dynamodb.Table;
     templatesTable: dynamodb.Table;
     templatesCategoryTable: dynamodb.Table;
+    templateVariablesTable: dynamodb.Table;
     assetsBucket: s3.Bucket;
 }
 
@@ -61,6 +62,7 @@ export class LambdaFunctions extends Construct {
             EVENTS_TABLE: props.eventsTable.tableName,
             TEMPLATES_TABLE: props.templatesTable.tableName,
             TEMPLATE_CATEGORIES_TABLE: props.templatesCategoryTable.tableName,
+            TEMPLATE_VARIABLES_TABLE: props.templateVariablesTable.tableName,
             ASSETS_BUCKET: props.assetsBucket.bucketName,
             USER_POOL_ID: props.userPool.userPoolId,
             CLIENT_ID: props.appClient.userPoolClientId
@@ -157,8 +159,10 @@ export class LambdaFunctions extends Construct {
         // Grant permissions to templates Lambda role
         props.templatesTable.grantFullAccess(this.templatesLambdaRole);
         props.templatesCategoryTable.grantFullAccess(this.templatesLambdaRole);
+        props.templateVariablesTable.grantFullAccess(this.templatesLambdaRole);
         props.templatesTable.grant(this.templatesLambdaRole, "dynamodb:Scan", "dynamodb:Query");
         props.templatesCategoryTable.grantFullAccess(this.templatesLambdaRole);
+        props.templateVariablesTable.grant(this.templatesLambdaRole, "dynamodb:Scan", "dynamodb:Query");
 
         // Grant asset bucket access to all roles
         props.assetsBucket.grantRead(this.teamLambdaRole);

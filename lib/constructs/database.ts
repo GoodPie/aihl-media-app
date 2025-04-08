@@ -14,6 +14,7 @@ export class Database extends Construct {
   public readonly eventsTable: dynamodb.Table;
   public readonly templatesTable: dynamodb.Table;
   public readonly templatesCategoryTable: dynamodb.Table;
+  public readonly templateVariablesTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props?: DatabaseProps) {
     super(scope, id);
@@ -80,12 +81,30 @@ export class Database extends Construct {
       partitionKey: { name: 'eventType', type: dynamodb.AttributeType.STRING }
     });
 
+    this.templatesTable.addGlobalSecondaryIndex({
+      indexName: 'CategoryIndex',
+      partitionKey: { name: 'categoryId', type: dynamodb.AttributeType.STRING }
+    });
+
     // Templates Category Table
     this.templatesCategoryTable = new dynamodb.Table(this, 'TemplatesCategoryTable', {
       partitionKey: { name: 'categoryId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       deletionProtection: true
+    });
+
+    // Template Variables Table
+    this.templateVariablesTable = new dynamodb.Table(this, 'TemplateVariablesTable', {
+      partitionKey: { name: 'variableName', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      deletionProtection: true
+    });
+
+    this.templateVariablesTable.addGlobalSecondaryIndex({
+      indexName: 'CategoryIndex',
+      partitionKey: { name: 'category', type: dynamodb.AttributeType.STRING }
     });
 
   }
@@ -143,6 +162,15 @@ export class Database extends Construct {
 
     this.templatesCategoryTable.grantReadData(role);
     this.templatesCategoryTable.grant(
+        role,
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:GetItem',
+        'dynamodb:Scan',
+        'dynamodb:Query');
+
+    this.templateVariablesTable.grantReadData(role);
+    this.templateVariablesTable.grant(
         role,
         'dynamodb:PutItem',
         'dynamodb:UpdateItem',

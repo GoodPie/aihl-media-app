@@ -22,7 +22,10 @@
     "strictPropertyInitialization": false,
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+    "paths": {
+      "@apiTypes/*": ["./types/api/*"]
+    }
   },
   "exclude": [
     "node_modules",

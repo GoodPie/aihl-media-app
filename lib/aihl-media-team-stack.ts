@@ -8,6 +8,7 @@ import {Storage} from './constructs/storage';
 import {LambdaFunctions} from './constructs/lambda';
 import {Api} from './constructs/api';
 import {Distribution} from './constructs/distribution';
+import {AIHLMediaRestApi} from "./configs/api.config";
 
 export class AIHLMediaTeamStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -32,6 +33,7 @@ export class AIHLMediaTeamStack extends cdk.Stack {
             eventsTable: database.eventsTable,
             templatesTable: database.templatesTable,
             templatesCategoryTable: database.templatesCategoryTable,
+            templateVariablesTable: database.templateVariablesTable,
             assetsBucket: storage.assetsBucket
         });
 
@@ -43,16 +45,19 @@ export class AIHLMediaTeamStack extends cdk.Stack {
         // Create API Gateway module
         const api = new Api(this, 'Api', {
             userPool: auth.userPool,
-            teamLambda: lambdaFunctions.teamLambda,
-            playerLambda: lambdaFunctions.playerLambda,
-            gameLambda: lambdaFunctions.gameLambda,
-            eventLambda: lambdaFunctions.eventLambda,
-            templateLambda: lambdaFunctions.templatesLambda,
-            statusLambda: lambdaFunctions.statusLambda
+            lambdas: {
+                team: lambdaFunctions.teamLambda,
+                player: lambdaFunctions.playerLambda,
+                game: lambdaFunctions.gameLambda,
+                event: lambdaFunctions.eventLambda,
+                template: lambdaFunctions.templatesLambda,
+                status: lambdaFunctions.statusLambda
+            },
+            apiConfig: AIHLMediaRestApi
         });
 
         // Create CloudFront Distribution module
-        const distribution = new Distribution(this, 'Distribution', {
+        new Distribution(this, 'Distribution', {
             websiteBucket: storage.websiteBucket,
             assetsBucket: storage.assetsBucket,
             api: api.api
