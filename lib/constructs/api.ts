@@ -293,15 +293,13 @@ export class Api extends Construct {
 
     /**
      * Creates category-related API resources with special authentication requirements:
-     * GET is public, other methods require authentication
      *
      * @param {lambda.Function} lambda - The Lambda function to handle category requests
      * @private
      */
     private createCategoryResources(lambda: lambda.Function): void {
         const categoriesResource = this.api.root.addResource(ResourceConfig.category.collection);
-        // Public GET, but authenticated POST
-        this.addMethod(categoriesResource, 'GET', lambda, false);
+        this.addMethod(categoriesResource, 'GET', lambda, true);
         this.addMethod(categoriesResource, 'POST', lambda, true);
 
         const categoryResource = categoriesResource.addResource(`{${ResourceConfig.category.item}Id}`);
@@ -318,7 +316,7 @@ export class Api extends Construct {
      */
     private createStatusResource(lambda: lambda.Function): void {
         const statusResource = this.api.root.addResource(ResourceConfig.status.collection);
-        this.addMethod(statusResource, 'GET', lambda, false);
+        this.addMethod(statusResource, 'GET', lambda, true);
     }
 
     /**
